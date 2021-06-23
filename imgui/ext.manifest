@@ -1,2 +1,11 @@
 # C++ symbol in your extension
 name: "DefoldImGui"
+
+platforms:
+  arm64-ios:
+    context:
+        flags:      ["-miphoneos-version-min=10.0"]
+
+  armv7-ios:
+    context:
+        flags:      ["-miphoneos-version-min=10.0"]
