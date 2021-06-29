@@ -4,8 +4,8 @@ name: "DefoldImGui"
 platforms:
   arm64-ios:
     context:
-        flags:      ["-miphoneos-version-min=10.0"]
+        defines: ["STBI_NO_THREAD_LOCALS"]
 
   armv7-ios:
     context:
-        flags:      ["-miphoneos-version-min=10.0"]
+        defines: ["STBI_NO_THREAD_LOCALS"]
