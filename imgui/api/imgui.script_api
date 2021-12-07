@@ -4,6 +4,73 @@
 
   members:
 
+
+#*****************************************************************************************************
+#***** DRAG AND DROP *********************************************************************************
+#*****************************************************************************************************
+
+  - name: begin_dragdrop_source
+    type: function
+
+    parameters:
+      - name: flags
+        type: number
+
+    return:
+      - name: result
+        type: bool
+
+#*****************************************************************************************************
+
+  - name: end_dragdrop_source
+    type: function
+
+#*****************************************************************************************************
+
+  - name: begin_dragdrop_target
+    type: function
+
+    return:
+      - name: result
+        type: bool
+
+#*****************************************************************************************************
+
+  - name: end_dragdrop_target
+    type: function
+
+#*****************************************************************************************************
+
+  - name: set_dragdrop_payload
+    type: function
+
+    parameters:
+      - name: type
+        type: string
+
+      - name: payload
+        type: string
+
+    return:
+      - name: result
+        type: bool
+
+#*****************************************************************************************************
+
+  - name: accept_dragdrop_payload
+    type: function
+
+    parameters:
+      - name: type
+        type: string
+
+      - name: flags
+        type: number
+
+    return:
+      - name: payload
+        type: string
+
 #*****************************************************************************************************
 #***** IMAGE ****************************************************************************************
 #*****************************************************************************************************
@@ -67,9 +134,9 @@
       - name: imageid
         type: number
       - name: pixel_width
-        type: number 
-      - name: pixel_height 
-        type: number 
+        type: number
+      - name: pixel_height
+        type: number
 
 #*****************************************************************************************************
 
@@ -78,7 +145,7 @@
 
     parameters:
       - name: image_data_base64
-        type: string 
+        type: string
       - name: image_data_len
         type: number
 
@@ -95,12 +162,12 @@
 
     parameters:
       - name: ttf_filename
-        type: string 
+        type: string
       - name: fontsize
         type: number
 
     return:
-      - name: fontid 
+      - name: fontid
         type: number
 
 #*****************************************************************************************************
@@ -110,7 +177,7 @@
 
     parameters:
       - name: ttf_data
-        type: string 
+        type: string
       - name: ttf_data_size
         type: number
       - name: fontsize
@@ -119,7 +186,7 @@
         type: number
 
     return:
-      - name: fontid 
+      - name: fontid
         type: number
 
 #*****************************************************************************************************
@@ -167,11 +234,11 @@
     type: function
 
     parameters:
-      - name: width 
+      - name: width
         type: number
       - name: height
         type: number
-        
+
 #*****************************************************************************************************
 
   - name: set_next_window_size
@@ -259,6 +326,74 @@
 #***** COMBO *****************************************************************************************
 #*****************************************************************************************************
 
+  - name: begin_popup_context_item
+    type: function
+
+    parameters:
+      - name: id
+        type: string
+      - name: popup_flags
+        type: number
+
+    return:
+      - name: result
+        type: boolean
+
+#*****************************************************************************************************
+
+  - name: begin_popup
+    type: function
+
+    parameters:
+      - name: id
+        type: string
+      - name: window_flags
+        type: number
+
+    return:
+      - name: result
+        type: boolean
+
+#*****************************************************************************************************
+
+  - name: begin_popup_modal
+    type: function
+
+    parameters:
+      - name: name
+        type: string
+      - name: window_flags
+        type: number
+
+    return:
+      - name: result
+        type: boolean
+
+#*****************************************************************************************************
+
+  - name: open_popup
+    type: function
+
+    parameters:
+      - name: id
+        type: string
+      - name: popup_flags
+        type: number
+
+#*****************************************************************************************************
+
+  - name: close_current_popup
+    type: function
+
+#*****************************************************************************************************
+
+  - name: end_popup
+    type: function
+
+#*****************************************************************************************************
+#***** COMBO *****************************************************************************************
+#*****************************************************************************************************
+
   - name: begin_combo
     type: function
 
@@ -310,6 +445,8 @@
         type: string
       - name: column
         type: number
+      - name: flags
+        type: number
 
     return:
       - name: result
@@ -336,6 +473,8 @@
         type: string
       - name: flags
         type: number
+      - name: init_width_or_weight
+        type: number
 
 
 #*****************************************************************************************************
@@ -356,6 +495,38 @@
 #*****************************************************************************************************
 
   - name: table_next_row
+    type: function
+
+#*****************************************************************************************************
+#***** TREE NODE *************************************************************************************
+#*****************************************************************************************************
+
+  - name: tree_node
+    type: function
+
+    parameters:
+      - name: text
+        type: string
+
+    return:
+      - name: flags
+        type: number
+
+#*****************************************************************************************************
+
+  - name: tree_pop
+    type: function
+
+#*****************************************************************************************************
+#***** TOOLTIP ***************************************************************************************
+#*****************************************************************************************************
+
+  - name: begin_tooltip
+    type: function
+
+#*****************************************************************************************************
+
+  - name: end_tooltip
     type: function
 
 #*****************************************************************************************************
@@ -435,6 +606,8 @@
         type: string
       - name: text
         type: string
+      - name: flags
+        type: number
 
     return:
       - name: changed
@@ -588,9 +761,9 @@
     type: function
 
     parameters:
-      - name: imageid 
+      - name: imageid
         type: number
-      - name: width(opt) 
+      - name: width(opt)
         type: number
       - name: height(opt)
         type: number
@@ -665,7 +838,7 @@
 
     parameters:
       - name: label
-        type: string 
+        type: string
       - name: valueoffset
         type: number
       - name: width
@@ -683,7 +856,7 @@
 
     parameters:
       - name: label
-        type: string 
+        type: string
       - name: valueoffset
         type: number
       - name: width
@@ -699,7 +872,7 @@
     type: function
 
     return:
-      - name: textpixelsize 
+      - name: textpixelsize
         type: number
 
 #*****************************************************************************************************
@@ -718,7 +891,7 @@
         type: number
       - name: y2
         type: number
-      - name: color 
+      - name: color
         type: number
 
 #*****************************************************************************************************
@@ -731,11 +904,11 @@
         type: number
       - name: y
         type: number
-      - name: width 
+      - name: width
         type: number
       - name: height
         type: number
-      - name: color 
+      - name: color
         type: number
 
 #*****************************************************************************************************
@@ -748,11 +921,11 @@
         type: number
       - name: y
         type: number
-      - name: width 
+      - name: width
         type: number
       - name: height
         type: number
-      - name: color 
+      - name: color
         type: number
 
 #*****************************************************************************************************
@@ -843,7 +1016,7 @@
 
     parameters:
       - name: character
-        type: string 
+        type: string
 
 #*****************************************************************************************************
 
@@ -874,6 +1047,24 @@
 
 #*****************************************************************************************************
 
+  - name: is_item_active
+    type: function
+
+    return:
+      - name: active
+        type: boolean
+
+#*****************************************************************************************************
+
+  - name: is_item_focused
+    type: function
+
+    return:
+      - name: focused
+        type: boolean
+
+#*****************************************************************************************************
+
   - name: is_item_clicked
     type: function
 
@@ -884,6 +1075,20 @@
     return:
       - name: clicked
         type: boolean
+
+#*****************************************************************************************************
+
+  - name: is_item_double_clicked
+    type: function
+
+    parameters:
+      - name: button
+        type: number
+
+    return:
+      - name: clicked
+        type: boolean
+
 
 #*****************************************************************************************************
 
@@ -968,6 +1173,32 @@
       - name: a
         type: number
 
+#*****************************************************************************************************
+
+  - name: push_style_color
+    type: function
+
+    parameters:
+      - name: color
+        type: number
+      - name: r
+        type: number
+      - name: g
+        type: number
+      - name: b
+        type: number
+      - name: a
+        type: number
+
+#*****************************************************************************************************
+
+  - name: pop_style_color
+    type: function
+
+    parameters:
+      - name: count
+        type: number
+
 
 #*****************************************************************************************************
 
@@ -976,6 +1207,36 @@
 
     parameters:
       - name: fontscale
+        type: number
+
+#*****************************************************************************************************
+
+  - name: set_global_font_scale
+    type: function
+
+    parameters:
+      - name: fontscale
+        type: number
+
+
+#*****************************************************************************************************
+
+  - name: scale_all_sizes
+    type: function
+
+    parameters:
+      - name: scale
+        type: number
+
+#*****************************************************************************************************
+#***** NAVIGATION ************************************************************************************
+#*****************************************************************************************************
+
+  - name: set_scroll_here_y
+    type: function
+
+    parameters:
+      - name: center_y_ratio
         type: number
 
 #*****************************************************************************************************
@@ -1131,3 +1392,85 @@
   - name: WINDOWFLAGS_NONAV
   - name: WINDOWFLAGS_NODECORATION
   - name: WINDOWFLAGS_NOINPUTS
+
+  - name: POPUPFLAGS_NONE
+  - name: POPUPFLAGS_MOUSEBUTTONLEFT
+  - name: POPUPFLAGS_MOUSEBUTTONRIGHT
+  - name: POPUPFLAGS_MOUSEBUTTONMIDDLE
+  - name: POPUPFLAGS_MOUSEBUTTONMASK
+  - name: POPUPFLAGS_MOUSEBUTTONDEFAULT
+  - name: POPUPFLAGS_NOOPENOVEREXISTINGPOPUP
+  - name: POPUPFLAGS_NOOPENOVERITEMS
+  - name: POPUPFLAGS_ANYPOPUPID
+  - name: POPUPFLAGS_ANYPOPUPLEVEL
+  - name: POPUPFLAGS_ANYPOPUP
+
+  - name: DROPFLAGS_NONE
+  - name: DROPFLAGS_SOURCENOPREVIEWTOOLTIP
+  - name: DROPFLAGS_SOURCENODISABLEHOVER
+  - name: DROPFLAGS_SOURCENOHOLDTOOPENOTHERS
+  - name: DROPFLAGS_SOURCEALLOWNULLID
+  - name: DROPFLAGS_SOURCEEXTERN
+  - name: DROPFLAGS_SOURCEAUTOEXPIREPAYLOAD
+  - name: DROPFLAGS_ACCEPTBEFOREDELIVERY
+  - name: DROPFLAGS_ACCEPTNODRAWDEFAULTRECT
+  - name: DROPFLAGS_ACCEPTNOPREVIEWTOOLTIP
+  - name: DROPFLAGS_ACCEPTPEEKONLY
+
+  - name: TABLE_NONE
+  - name: TABLE_RESIZABLE
+  - name: TABLE_REORDERABLE
+  - name: TABLE_HIDEABLE
+  - name: TABLE_SORTABLE
+  - name: TABLE_NOSAVEDSETTINGS
+  - name: TABLE_CONTEXTMENUINBODY
+  - name: TABLE_ROWBG
+  - name: TABLE_BORDERSINNERH
+  - name: TABLE_BORDERSOUTERH
+  - name: TABLE_BORDERSINNERV
+  - name: TABLE_BORDERSOUTERV
+  - name: TABLE_BORDERSH
+  - name: TABLE_BORDERSV
+  - name: TABLE_BORDERSINNER
+  - name: TABLE_BORDERSOUTER
+  - name: TABLE_BORDERS
+  - name: TABLE_NOBORDERSINBODY
+  - name: TABLE_NOBORDERSINBODYUNTILRESIZE
+  - name: TABLE_SIZINGFIXEDFIT
+  - name: TABLE_SIZINGFIXEDSAME
+  - name: TABLE_SIZINGSTRETCHPROP
+  - name: TABLE_SIZINGSTRETCHSAME
+  - name: TABLE_NOHOSTEXTENDX
+  - name: TABLE_NOHOSTEXTENDY
+  - name: TABLE_NOKEEPCOLUMNSVISIBLE
+  - name: TABLE_PRECISEWIDTHS
+  - name: TABLE_NOCLIP
+  - name: TABLE_PADOUTERX
+  - name: TABLE_NOPADOUTERX
+  - name: TABLE_NOPADINNERX
+  - name: TABLE_SCROLLX
+  - name: TABLE_SCROLLY
+  - name: TABLE_SORTMULTI
+  - name: TABLE_SORTTRISTATE
+
+  - name: INPUTFLAGS_NONE
+  - name: INPUTFLAGS_CHARSDECIMAL
+  - name: INPUTFLAGS_CHARSHEXADECIMAL
+  - name: INPUTFLAGS_CHARSUPPERCASE
+  - name: INPUTFLAGS_CHARSNOBLANK
+  - name: INPUTFLAGS_AUTOSELECTALL
+  - name: INPUTFLAGS_ENTERRETURNSTRUE
+  - name: INPUTFLAGS_CALLBACKCOMPLETION
+  - name: INPUTFLAGS_CALLBACKHISTORY
+  - name: INPUTFLAGS_CALLBACKALWAYS
+  - name: INPUTFLAGS_CALLBACKCHARFILTER
+  - name: INPUTFLAGS_ALLOWTABINPUT
+  - name: INPUTFLAGS_CTRLENTERFORNEWLINE
+  - name: INPUTFLAGS_NOHORIZONTALSCROLL
+  - name: INPUTFLAGS_ALWAYSINSERTMODE
+  - name: INPUTFLAGS_READONLY
+  - name: INPUTFLAGS_PASSWORD
+  - name: INPUTFLAGS_NOUNDOREDO
+  - name: INPUTFLAGS_CHARSSCIENTIFIC
+  - name: INPUTFLAGS_CALLBACKRESIZE
+  - name: INPUTFLAGS_CALLBACKEDIT

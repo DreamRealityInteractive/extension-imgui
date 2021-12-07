@@ -1,3 +1,5 @@
+go.property("acquire_input_focus", true)
+
 local LEFT_MOUSE = hash("mouse_button_left")
 local MIDDLE_MOUSE = hash("mouse_button_middle")
 local RIGHT_MOUSE = hash("mouse_button_right")
@@ -10,7 +12,9 @@ local KEY_ALT = hash("key_alt")
 local KEY_SUPER = hash("key_super")
 
 function init(self)
-	msg.post(".", "acquire_input_focus")
+	if self.acquire_input_focus then
+		msg.post(".", "acquire_input_focus")
+	end
 	self.actions = {}
 	self.mouse = {
 		x = 0,
@@ -20,6 +24,12 @@ function init(self)
 	}
 end
 
+function final(self)
+	if self.acquire_input_focus then
+		msg.post(".", "release_input_focus")
+	end
+end
+
 function update(self, dt)
 	local w, h = window.get_size()
 	imgui.set_display_size(w, h)
@@ -27,8 +37,8 @@ function update(self, dt)
 	imgui.set_mouse_input(
 		self.mouse.x, h - self.mouse.y,
 		self.mouse.buttons[LEFT_MOUSE] or 0,
-		self.mouse.buttons[MIDDLE_MOUSE] or 0,
 		self.mouse.buttons[RIGHT_MOUSE] or 0,
+		self.mouse.buttons[MIDDLE_MOUSE] or 0,
 		self.mouse.wheel
 	)
 end

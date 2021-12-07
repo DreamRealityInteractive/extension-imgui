@@ -1,11 +1,10 @@
-# C++ symbol in your extension
 name: "DefoldImGui"
 
 platforms:
-  arm64-ios:
-    context:
-        defines: ["STBI_NO_THREAD_LOCALS"]
+    x86-win32:
+        context:
+            defines: ["STBI_NO_SIMD"]
 
-  armv7-ios:
-    context:
-        defines: ["STBI_NO_THREAD_LOCALS"]
+    x86_64-win32:
+        context:
+            defines: ["STBI_NO_SIMD"]
