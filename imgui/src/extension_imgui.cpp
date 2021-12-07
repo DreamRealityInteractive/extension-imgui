@@ -1348,6 +1348,16 @@ static int imgui_IsItemHovered(lua_State* L)
     return 1;
 }
 
+static int imgui_IsWantCaptureMouse(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    ImGuiIO& io = ImGui::GetIO();
+    lua_pushboolean(L, io.WantCaptureMouse);
+    return 1;
+}
+
+
+
 // ----------------------------
 // ----- STYLE ----------------
 // ----------------------------
@@ -1852,6 +1862,7 @@ static const luaL_reg Module_methods[] =
     {"is_item_hovered", imgui_IsItemHovered},
     {"is_mouse_clicked", imgui_IsMouseClicked},
     {"is_mouse_double_clicked", imgui_IsMouseDoubleClicked},
+	{"is_want_capture_mouse", imgui_IsWantCaptureMouse},
 
     {"set_style_window_rounding", imgui_SetStyleWindowRounding},
     {"set_style_window_bordersize", imgui_SetStyleWindowBorderSize},
