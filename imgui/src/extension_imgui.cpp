@@ -1350,7 +1350,7 @@ static int imgui_IsItemHovered(lua_State* L)
 
 static int imgui_IsWantCaptureMouse(lua_State* L)
 {
-    DM_LUA_STACK_CHECK(L, 0);
+    DM_LUA_STACK_CHECK(L, 1);
     ImGuiIO& io = ImGui::GetIO();
     lua_pushboolean(L, io.WantCaptureMouse);
     return 1;
