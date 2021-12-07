@@ -1,47 +1,33 @@
-// myextension.cpp
-// Extension lib defines
 #define LIB_NAME "ImGui"
 #define MODULE_NAME "imgui"
-
-#include <stdlib.h>
-#include <vector>
 
 #include "imgui/imgui.h"
 #include "imgui/imconfig.h"
 
+// set in imconfig.h
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
 #include <GL/gl3w.h>
 #endif
 
-// include the Defold SDK
-#include <dmsdk/sdk.h>
-#include  <dmsdk/dlib/crypt.h>
-
+// imgui renderer backend and possible platform extras
 #if defined(DM_PLATFORM_ANDROID)
 #include "imgui/imgui_impl_android.h"
 #endif
 #include "imgui/imgui_impl_opengl3.h"
 
+#include <dmsdk/sdk.h>
+#include <dmsdk/dlib/crypt.h>
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_STATIC
-#include "imgui/stb_image.h"
+#include "stb/stb_image.h"
 
-#define MAX_HISTOGRAM_VALUES    1000 * 1024     
+#define MAX_HISTOGRAM_VALUES    1000 * 1024
 #define MAX_IMAGE_NAME          256
 
 #define TEXTBUFFER_SIZE         sizeof(char) * 1000 * 1024
 
-
-static bool g_imgui_NewFrame        = false;
-static char* g_imgui_TextBuffer     = 0;
-
-// ----------------------------
-// ----- IMAGES ---------------
-// ----------------------------
-
-// extern unsigned char *stbi_load(char const *filename, int *x, int *y, int *comp, int req_comp);
-// 
-typedef struct ImgObject 
+typedef struct ImgObject
 {
     int                w;
     int                h;
@@ -51,8 +37,22 @@ typedef struct ImgObject
     unsigned char *    data;
 } ImgObject;
 
-static std::vector<ImFont *>      fonts;
-static std::vector<ImgObject>     images;
+
+static bool g_imgui_NewFrame        = false;
+static char* g_imgui_TextBuffer     = 0;
+static dmArray<ImFont*> g_imgui_Fonts;
+static dmArray<ImgObject> g_imgui_Images;
+
+
+
+
+
+// ----------------------------
+// ----- IMAGES ---------------
+// ----------------------------
+
+// extern unsigned char *stbi_load(char const *filename, int *x, int *y, int *comp, int req_comp);
+//
 
 static int imgui_ImageB64Decode(lua_State *L)
 {
@@ -64,152 +64,185 @@ static int imgui_ImageB64Decode(lua_State *L)
     char *datastr = (char *)malloc(dstlen);
     bool result;
     result = dmCrypt::Base64Decode((const uint8_t*)data, datalen, (uint8_t*)datastr, &dstlen);
-    
+
     lua_pushlstring(L, datastr, dstlen);
     free(datastr);
     return 1;
 }
 
 
-static int imgui_ImageInternalLoad(const char *filename, ImgObject *iobj)
+static int imgui_ImageInternalLoad(const char *filename, ImgObject *image)
 {
-    if(iobj->data == nullptr)
+    if (image->data == 0)
     {
-        dmLogError("Error loading image: %s\n", filename);
-        return -1;
+        dmLogError("Error loading image: %s", filename);
+        return 0;
     }
 
-    glGenTextures(1, &iobj->tid);
-    glBindTexture(GL_TEXTURE_2D, iobj->tid);
+    dmLogInfo("imgui_ImageInternalLoad before %d", image->tid);
 
-    strcpy(iobj->name, filename);
-    images.push_back(*iobj);
+    glGenTextures(1, &image->tid);
+    dmLogInfo("imgui_ImageInternalLoad after %d", image->tid);
+    glBindTexture(GL_TEXTURE_2D, image->tid);
+
+    strcpy(image->name, filename);
+    if (g_imgui_Images.Full())
+    {
+        g_imgui_Images.OffsetCapacity(2);
+    }
+    g_imgui_Images.Push(*image);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, iobj->w, iobj->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, iobj->data);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->w, image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->data);
 
-    return images.size()-1;
-}    
+    return 1;
+}
 
 
 // Image handling needs to be smarter, but this will do for the time being.
 static int imgui_ImageLoadData(lua_State* L)
 {
-    DM_LUA_STACK_CHECK(L, 1);
+    DM_LUA_STACK_CHECK(L, 3);
     const char * filename = luaL_checkstring(L, 1);
+    ImgObject image;
 
     // If its already in the vector, return the id
-    for(int i=0; i<images.size(); i++)
+    for (int i=0; i<g_imgui_Images.Size(); i++)
     {
-        if(strcmp(images[i].name, filename) == 0) 
+        if (strcmp(g_imgui_Images[i].name, filename) == 0)
         {
-            lua_pushinteger(L, i);
-            return 1;
+            image = g_imgui_Images[i];
+            lua_pushinteger(L, image.tid);
+            lua_pushinteger(L, image.w);
+            lua_pushinteger(L, image.h);
+            return 3;
         }
     }
 
-    ImgObject     iobj;
     unsigned char *strdata = (unsigned char *)luaL_checkstring(L, 2);
     int lendata = luaL_checkinteger(L, 3);
-    iobj.data = stbi_load_from_memory( strdata, lendata, &iobj.w, &iobj.h, NULL, STBI_rgb_alpha);
-    //dmLogError("Loaded Image: %s %d %d \n", filename, iobj.w, iobj.h);
-    
-    if(iobj.data == nullptr)
+    image.data = stbi_load_from_memory( strdata, lendata, &image.w, &image.h, NULL, STBI_rgb_alpha);
+    if (image.data == 0)
     {
-        dmLogError("Error loading image: %s\n", filename);
+        dmLogError("Error loading image: %s", filename);
         lua_pushnil(L);
-        return 1;
+        lua_pushnil(L);
+        lua_pushnil(L);
+        return 3;
     }
-        
-    int idx = imgui_ImageInternalLoad(filename, &iobj);
-    if(idx < 0) 
+
+    if (!imgui_ImageInternalLoad(filename, &image))
     {
         lua_pushnil(L);
-        return 1;
+        lua_pushnil(L);
+        lua_pushnil(L);
+        return 3;
     }
-    
-    stbi_image_free(iobj.data);
-    iobj.data = NULL;
-    lua_pushinteger(L, idx);
-    return 1;
+
+    stbi_image_free(image.data);
+    image.data = 0;
+    lua_pushinteger(L, image.tid);
+    lua_pushinteger(L, image.w);
+    lua_pushinteger(L, image.h);
+    return 3;
 }
 
 // Image handling needs to be smarter, but this will do for the time being.
 static int imgui_ImageLoad(lua_State* L)
 {
-    DM_LUA_STACK_CHECK(L, 1);
+    DM_LUA_STACK_CHECK(L, 3);
     const char * filename = luaL_checkstring(L, 1);
+    dmLogInfo("imgui_ImageLoad %s", filename);
+    ImgObject image;
 
     // If its already in the vector, return the id
-    for(int i=0; i<images.size(); i++)
+    for (int i = 0; i < g_imgui_Images.Size(); i++)
     {
-        if(strcmp(images[i].name, filename) == 0) 
+        if(strcmp(g_imgui_Images[i].name, filename) == 0)
         {
-            lua_pushinteger(L, i);
-            return 1;
+            image = g_imgui_Images[i];
+            lua_pushinteger(L, image.tid);
+            lua_pushinteger(L, image.w);
+            lua_pushinteger(L, image.h);
+            return 3;
         }
     }
 
-    ImgObject     iobj;
-    iobj.data = stbi_load(filename, &iobj.w, &iobj.h, NULL, STBI_rgb_alpha);
-    if(iobj.data == nullptr)
+    image.data = stbi_load(filename, &image.w, &image.h, NULL, STBI_rgb_alpha);
+    if (image.data == 0)
     {
-        dmLogError("Error loading image: %s\n", filename);
+        dmLogError("Error loading image: %s", filename);
         lua_pushnil(L);
-        return 1;
+        lua_pushnil(L);
+        lua_pushnil(L);
+        return 3;
     }
-    
-    int idx = imgui_ImageInternalLoad(filename, &iobj);
-    if(idx < 0) 
+
+    if (!imgui_ImageInternalLoad(filename, &image))
     {
         lua_pushnil(L);
-        return 1;
+        lua_pushnil(L);
+        lua_pushnil(L);
+        return 3;
     }
-    
-    stbi_image_free(iobj.data);
-    iobj.data = NULL;
-    lua_pushinteger(L, idx);
-    return 1;
+
+    stbi_image_free(image.data);
+    image.data = 0;
+    lua_pushinteger(L, image.tid);
+    lua_pushinteger(L, image.w);
+    lua_pushinteger(L, image.h);
+    return 3;
 }
 
 static int imgui_ImageGet( lua_State *L )
 {
-    DM_LUA_STACK_CHECK(L, 1);
-    int id = luaL_checkinteger(L, 1);
-    if(id>=0 && id <images.size())
+    DM_LUA_STACK_CHECK(L, 3);
+    GLuint tid = (GLuint)luaL_checkinteger(L, 1);
+
+    for (int i = 0; i < g_imgui_Images.Size(); i++)
     {
-        if(images[id].tid >= 0)
-            lua_pushinteger(L, id);
-        else 
-            lua_pushnil(L);
+        if (g_imgui_Images[i].tid == tid)
+        {
+            ImgObject image = g_imgui_Images[i];
+            lua_pushinteger(L, image.tid);
+            lua_pushinteger(L, image.w);
+            lua_pushinteger(L, image.h);
+            return 3;
+        }
     }
-    else 
-        lua_pushnil(L);
-    return 1;
+
+    lua_pushnil(L);
+    lua_pushnil(L);
+    lua_pushnil(L);
+    return 3;
 }
 
 static int imgui_ImageAdd( lua_State *L )
 {
     DM_LUA_STACK_CHECK(L, 0);
-    int tid = luaL_checkinteger(L, 1);
+    GLuint tid = (GLuint)luaL_checkinteger(L, 1);
     int w = luaL_checkinteger(L, 2);
     int h = luaL_checkinteger(L, 3);
-    if(tid<0 || tid >=images.size()) 
-        return 0;
-    ImgObject iobj = images[tid];
-    ImGui::Image((void*)(intptr_t)iobj.tid, ImVec2(w, h));
+    ImGui::Image((void*)(intptr_t)tid, ImVec2(w, h));
     return 0;
 }
 
 static int imgui_ImageFree( lua_State *L )
 {
     DM_LUA_STACK_CHECK(L, 0);
-    int tid = luaL_checkinteger(L, 1);
-    assert(tid>=0 && tid <images.size());
-    images[tid].tid = -1;
+    GLuint tid = (GLuint)luaL_checkinteger(L, 1);
+    for (int i = 0; i < g_imgui_Images.Size(); i++)
+    {
+        if (g_imgui_Images[i].tid == tid)
+        {
+            glDeleteTextures(1, &tid);
+            g_imgui_Images.EraseSwap(i);
+            break;
+        }
+    }
     return 0;
 }
 
@@ -444,6 +477,141 @@ static int imgui_EndChild(lua_State* L)
 
 
 // ----------------------------
+// ----- POPUP ---------
+// ----------------------------
+
+static int imgui_BeginPopupContextItem(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    const char* id = luaL_checkstring(L, 1);
+    bool result = ImGui::BeginPopupContextItem(id);
+    lua_pushboolean(L, result);
+    return 1;
+}
+
+static int imgui_BeginPopup(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    const char* id = luaL_checkstring(L, 1);
+    int flags = 0;
+    if (lua_isnumber(L, 2)) flags = luaL_checknumber(L, 2);
+    bool result = ImGui::BeginPopup(id, flags);
+    lua_pushboolean(L, result);
+    return 1;
+}
+
+static int imgui_BeginPopupModal(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    const char* name = luaL_checkstring(L, 1);
+    int flags = 0;
+    if (lua_isnumber(L, 2)) flags = luaL_checknumber(L, 2);
+    bool result = ImGui::BeginPopupModal(name, 0, flags);
+    lua_pushboolean(L, result);
+    return 1;
+}
+
+static int imgui_OpenPopup(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    imgui_NewFrame();
+    const char* id = luaL_checkstring(L, 1);
+    int flags = 0;
+    if (lua_isnumber(L, 2)) flags = luaL_checknumber(L, 2);
+    ImGui::OpenPopup(id, flags);
+    return 0;
+}
+
+static int imgui_CloseCurrentPopup(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    imgui_NewFrame();
+    ImGui::CloseCurrentPopup();
+    return 0;
+}
+
+static int imgui_EndPopup(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    imgui_NewFrame();
+    ImGui::EndPopup();
+    return 0;
+}
+
+// ----------------------------
+// ----- DRAG AND DROP --------
+// ----------------------------
+static int imgui_BeginDragDropSource(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    uint32_t flags = 0;
+    if (lua_isnumber(L, 1))
+    {
+        flags = luaL_checkint(L, 1);
+    }
+    bool result = ImGui::BeginDragDropSource(flags);
+    lua_pushboolean(L, result);
+    return 1;
+}
+static int imgui_EndDragDropSource(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    imgui_NewFrame();
+    ImGui::EndDragDropSource();
+    return 0;
+}
+static int imgui_BeginDragDropTarget(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    bool result = ImGui::BeginDragDropTarget();
+    lua_pushboolean(L, result);
+    return 1;
+}
+static int imgui_EndDragDropTarget(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    imgui_NewFrame();
+    ImGui::EndDragDropTarget();
+    return 0;
+}
+
+static int imgui_SetDragDropPayload(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    const char* type = luaL_checkstring(L, 1);
+    const char* payload = luaL_checkstring(L, 2);
+
+    bool result = ImGui::SetDragDropPayload(type, payload, strlen(payload));
+    lua_pushboolean(L, result);
+    return 1;
+}
+static int imgui_AcceptDragDropPayload(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    const char* type = luaL_checkstring(L, 1);
+    uint32_t flags = 0;
+    if (lua_isnumber(L, 2))
+    {
+        flags = luaL_checkint(L, 2);
+    }
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(type, flags);
+    if (payload) {
+        lua_pushlstring(L, (char*)payload->Data, payload->DataSize);
+    }
+    else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+// ----------------------------
 // ----- COMBO ---------
 // ----------------------------
 static int imgui_BeginCombo(lua_State* L)
@@ -502,7 +670,12 @@ static int imgui_BeginTable(lua_State* L)
     imgui_NewFrame();
     const char* id = luaL_checkstring(L, 1);
     int column = luaL_checkinteger(L, 2);
-    bool result = ImGui::BeginTable(id, column);
+    uint32_t flags = 0;
+    if (lua_isnumber(L, 3))
+    {
+        flags = luaL_checkint(L, 3);
+    }
+    bool result = ImGui::BeginTable(id, column, flags);
     lua_pushboolean(L, result);
     return 1;
 }
@@ -530,7 +703,12 @@ static int imgui_TableSetupColumn(lua_State* L)
     {
         flags = luaL_checkint(L, 2);
     }
-    ImGui::TableSetupColumn(label, flags);
+    float weight = 0.0;
+    if (lua_isnumber(L, 3))
+    {
+        weight = luaL_checknumber(L, 3);
+    }
+    ImGui::TableSetupColumn(label, flags, weight);
     return 0;
 }
 static int imgui_TableSetColumnIndex(lua_State* L)
@@ -553,6 +731,25 @@ static int imgui_TableNextRow(lua_State* L)
     DM_LUA_STACK_CHECK(L, 0);
     imgui_NewFrame();
     ImGui::TableNextRow();
+    return 0;
+}
+
+
+// ----------------------------
+// ----- TOOLTIP ---------
+// ----------------------------
+static int imgui_BeginTooltip(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    imgui_NewFrame();
+    ImGui::BeginTooltip();
+    return 0;
+}
+static int imgui_EndTooltip(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    imgui_NewFrame();
+    ImGui::EndTooltip();
     return 0;
 }
 
@@ -612,6 +809,7 @@ static int imgui_EndTabItem(lua_State* L)
 // ----------------------------
 // ----- WIDGETS ---------
 // ----------------------------
+
 static int imgui_Text(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
@@ -634,8 +832,11 @@ static int imgui_TextGetSize(lua_State* L)
     const char* text = luaL_checkstring(L, 1);
     float font_size = luaL_checknumber(L, 2);
     int fontid = 0;
-    if(argc > 2) fontid = luaL_checkinteger(L, 3);
-    ImFont *font = fonts[fontid];
+    if(argc > 2)
+    {
+        fontid = luaL_checkinteger(L, 3);
+    }
+    ImFont *font = g_imgui_Fonts[fontid];
     ImVec2 sz = font->CalcTextSizeA(font_size, FLT_MAX, 0.0f, text);
 
     lua_pushnumber(L, sz.x);
@@ -664,7 +865,12 @@ static int imgui_InputText(lua_State* L)
     const char* label = luaL_checkstring(L, 1);
     const char* text = luaL_checkstring(L, 2);
     dmStrlCpy(g_imgui_TextBuffer, text, TEXTBUFFER_SIZE);
-    bool changed = ImGui::InputText(label, g_imgui_TextBuffer, TEXTBUFFER_SIZE);
+    uint32_t flags = 0;
+    if (lua_isnumber(L, 3))
+    {
+        flags = luaL_checkint(L, 3);
+    }
+    bool changed = ImGui::InputText(label, g_imgui_TextBuffer, TEXTBUFFER_SIZE, flags);
     lua_pushboolean(L, changed);
     if (changed)
     {
@@ -722,7 +928,7 @@ static int imgui_InputFloat(lua_State* L)
                 dmSnPrintf(float_precision, sizeof(float_precision), "%%.%df", precision_count );
             }
         }
-    }    
+    }
     bool changed = ImGui::InputFloat(label, &value, step, step_fast, float_precision);
     lua_pushboolean(L, changed);
     if (changed)
@@ -762,7 +968,7 @@ static int imgui_InputDouble(lua_State* L)
                 dmSnPrintf(dbl_precision, sizeof(dbl_precision), "%%.%df", precision_count );
             }
         }
-    }    
+    }
     bool changed = ImGui::InputDouble(label, &value, step, step_fast, dbl_precision);
     lua_pushboolean(L, changed);
     if (changed)
@@ -887,7 +1093,7 @@ static int imgui_Button(lua_State* L)
     imgui_NewFrame();
     const char* text = luaL_checkstring(L, 1);
     bool pushed = false;
-    if(argc > 1) 
+    if(argc > 1)
     {
         int width = luaL_checkinteger(L, 2);
         int height = luaL_checkinteger(L, 3);
@@ -906,18 +1112,17 @@ static int imgui_ButtonImage(lua_State* L)
     DM_LUA_STACK_CHECK(L, 1);
     int argc = lua_gettop(L);
     imgui_NewFrame();
-    int tid = luaL_checknumber(L, 1);
-    ImgObject iobj = images[tid];
+    GLuint tid = (GLuint)luaL_checknumber(L, 1);
     bool pushed = false;
-    if(argc > 1) 
+    if(argc > 1)
     {
         int width = luaL_checkinteger(L, 2);
         int height = luaL_checkinteger(L, 3);
-        pushed = ImGui::ImageButton((void*)(intptr_t)iobj.tid, ImVec2(width, height));
+        pushed = ImGui::ImageButton((void*)(intptr_t)tid, ImVec2(width, height));
     }
     else
     {
-        pushed = ImGui::ImageButton((void*)(intptr_t)iobj.tid, ImVec2(0,0));
+        pushed = ImGui::ImageButton((void*)(intptr_t)tid, ImVec2(0,0));
     }
     lua_pushboolean(L, pushed);
     return 1;
@@ -1010,7 +1215,7 @@ static float     values_lines[MAX_HISTOGRAM_VALUES];
 static int imgui_PlotLines(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
-    const char *lbl = luaL_checkstring(L, 1); 
+    const char *lbl = luaL_checkstring(L, 1);
     int valoff = luaL_checkinteger(L, 2);
     int width = luaL_checkinteger(L, 3);
     int height = luaL_checkinteger(L, 4);
@@ -1037,7 +1242,7 @@ static float     values_hist[MAX_HISTOGRAM_VALUES];
 static int imgui_PlotHistogram(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
-    const char *lbl = luaL_checkstring(L, 1); 
+    const char *lbl = luaL_checkstring(L, 1);
     int valoff = luaL_checkinteger(L, 2);
     int width = luaL_checkinteger(L, 3);
     int height = luaL_checkinteger(L, 4);
@@ -1077,11 +1282,12 @@ static int imgui_Demo(lua_State* L)
 // ----------------------------
 static int imgui_IsMouseDoubleClicked(lua_State* L)
 {
-    DM_LUA_STACK_CHECK(L, 0);
+    DM_LUA_STACK_CHECK(L, 1);
     imgui_NewFrame();
     uint32_t button = luaL_checknumber(L, 1);
-    ImGui::IsMouseDoubleClicked(button);
-    return 0;
+    bool clicked = ImGui::IsMouseDoubleClicked(button);
+    lua_pushboolean(L, clicked);
+    return 1;
 }
 
 static int imgui_IsMouseClicked(lua_State* L)
@@ -1094,6 +1300,24 @@ static int imgui_IsMouseClicked(lua_State* L)
     return 1;
 }
 
+static int imgui_IsItemActive(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    bool active = ImGui::IsItemActive();
+    lua_pushboolean(L, active);
+    return 1;
+}
+
+static int imgui_IsItemFocused(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    bool focused = ImGui::IsItemFocused();
+    lua_pushboolean(L, focused);
+    return 1;
+}
+
 static int imgui_IsItemClicked(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 1);
@@ -1101,6 +1325,17 @@ static int imgui_IsItemClicked(lua_State* L)
     uint32_t button = luaL_checknumber(L, 1);
     bool clicked = ImGui::IsItemClicked(button);
     lua_pushboolean(L, clicked);
+    return 1;
+}
+
+static int imgui_IsItemDoubleClicked(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    uint32_t button = luaL_checknumber(L, 1);
+    bool clicked = ImGui::IsItemClicked(button);
+    bool double_clicked = ImGui::IsMouseDoubleClicked(button);
+    lua_pushboolean(L, clicked && double_clicked);
     return 1;
 }
 
@@ -1172,6 +1407,28 @@ static int imgui_SetStyleColor(lua_State* L)
     style.Colors[luaL_checkinteger(L, 1)] = ImVec4(r, g, b, a);
     return 0;
 }
+static int imgui_PushStyleColor(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    double r = luaL_checknumber(L, 2);
+    double g = luaL_checknumber(L, 3);
+    double b = luaL_checknumber(L, 4);
+    double a = luaL_checknumber(L, 5);
+    ImGuiCol col = luaL_checkinteger(L, 1);
+    ImGui::PushStyleColor(col, ImVec4(r, g, b, a));
+    return 0;
+}
+static int imgui_PopStyleColor(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    int count = 1;
+    if (lua_isnumber(L, 1))
+    {
+        count = luaL_checkint(L, 1);
+    }
+    ImGui::PopStyleColor(count);
+    return 0;
+}
 
 static int imgui_SetWindowFontScale(lua_State *L)
 {
@@ -1180,6 +1437,25 @@ static int imgui_SetWindowFontScale(lua_State *L)
     ImGui::SetWindowFontScale(scale);
     return 0;
 }
+
+static int imgui_SetGlobalFontScale(lua_State *L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    float scale = luaL_checknumber(L, 1);
+    ImGuiIO& io = ImGui::GetIO();
+    io.FontGlobalScale = scale;
+    return 0;
+}
+
+static int imgui_ScaleAllSizes(lua_State *L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    float scale = luaL_checknumber(L, 1);
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScaleAllSizes(scale);
+    return 0;
+}
+
 
 static int imgui_SetCursorPos(lua_State *L)
 {
@@ -1191,29 +1467,41 @@ static int imgui_SetCursorPos(lua_State *L)
     return 0;
 }
 
+
 // ----------------------------
-// ----- CONFIG -----------------
+// ----- NAVIGATION -----------------
 // ----------------------------
-static int imgui_SetDefaults(lua_State* L)
+
+static int imgui_SetScrollHereY(lua_State *L)
 {
     DM_LUA_STACK_CHECK(L, 0);
-
-    ImGuiIO& io = ImGui::GetIO();
-    ImFont * def = io.Fonts->AddFontDefault();
-    fonts.push_back(def);
+    imgui_NewFrame();
+    float center_y_ratio = luaL_checknumber(L, 1);
+    ImGui::SetScrollHereY(center_y_ratio);
     return 0;
 }
 
-static int imgui_SetIniFilename(lua_State* L)
+
+// ----------------------------
+// ----- FONT -----------------
+// ----------------------------
+
+static int imgui_StoreFont(ImFont* font)
 {
-    DM_LUA_STACK_CHECK(L, 0);
-    const char *filename = 0;
-    if (lua_isstring(L, 1)) {
-        filename = luaL_checkstring(L, 1);
+    if (g_imgui_Fonts.Full())
+    {
+        g_imgui_Fonts.OffsetCapacity(2);
     }
+    g_imgui_Fonts.Push(font);
+    return g_imgui_Fonts.Size() - 1;
+}
 
-    ImGui::GetIO().IniFilename = filename;
-
+static ImFont* imgui_GetFont(int index)
+{
+    if (index >= 0 && index < g_imgui_Fonts.Size())
+    {
+        return g_imgui_Fonts[index];
+    }
     return 0;
 }
 
@@ -1224,14 +1512,14 @@ static int imgui_FontAddTTFFile(lua_State * L)
     float font_size = luaL_checknumber(L, 2);
 
     ImGuiIO& io = ImGui::GetIO();
-    ImFont* font = io.Fonts->AddFontFromFileTTF(ttf_filename, font_size);    
-    // Put font in map. 
-    if(font != NULL) 
+    ImFont* font = io.Fonts->AddFontFromFileTTF(ttf_filename, font_size);
+    // Put font in map.
+    if(font != NULL)
     {
-        fonts.push_back(font);
-        lua_pushinteger(L, fonts.size() - 1);
+        int index = imgui_StoreFont(font);
+        lua_pushinteger(L, index);
     }
-    else 
+    else
     {
         lua_pushnil(L);
     }
@@ -1250,14 +1538,14 @@ static int imgui_FontAddTTFData(lua_State * L)
     memcpy(ttf_data_cpy, ttf_data, ttf_data_size);
 
     ImGuiIO& io = ImGui::GetIO();
-    ImFont* font = io.Fonts->AddFontFromMemoryTTF((void *)ttf_data_cpy, font_size, font_pixels);    
-    // Put font in map. 
-    if(font != NULL) 
+    ImFont* font = io.Fonts->AddFontFromMemoryTTF((void *)ttf_data_cpy, font_size, font_pixels);
+    // Put font in map.
+    if(font != NULL)
     {
-        fonts.push_back(font);
-        lua_pushinteger(L, fonts.size() - 1);
+        int index = imgui_StoreFont(font);
+        lua_pushinteger(L, index);
     }
-    else 
+    else
     {
         lua_pushnil(L);
     }
@@ -1268,8 +1556,11 @@ static int imgui_FontPush(lua_State *L)
 {
     DM_LUA_STACK_CHECK(L, 0);
     int fontid = luaL_checkinteger(L, 1);
-    if(fontid >= 0 && fontid < fonts.size())
-    ImGui::PushFont(fonts[fontid]);
+    ImFont* font = imgui_GetFont(fontid);
+    if (font)
+    {
+        ImGui::PushFont(font);
+    }
     return 0;
 }
 
@@ -1286,9 +1577,13 @@ static int imgui_FontScale(lua_State *L)
     float oldscale = 1.0f;
     int fontid = luaL_checkinteger(L, 1);
     float fontscale = luaL_checknumber(L, 2);
-    if(fontid >= 0 && fontid < fonts.size())
-    oldscale = fonts[fontid]->Scale;
-    fonts[fontid]->Scale = fontscale;
+
+    ImFont* font = imgui_GetFont(fontid);
+    if(font)
+    {
+        oldscale = font->Scale;
+        font->Scale = fontscale;
+    }
     lua_pushnumber(L, oldscale);
     return 1;
 }
@@ -1364,6 +1659,32 @@ static int imgui_DrawProgressBar(lua_State* L)
 }
 
 // ----------------------------
+// ----- CONFIG -----------------
+// ----------------------------
+static int imgui_SetDefaults(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImFont* def = io.Fonts->AddFontDefault();
+    imgui_StoreFont(def);
+    return 0;
+}
+
+static int imgui_SetIniFilename(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    const char *filename = 0;
+    if (lua_isstring(L, 1)) {
+        filename = luaL_checkstring(L, 1);
+    }
+
+    ImGui::GetIO().IniFilename = filename;
+
+    return 0;
+}
+
+// ----------------------------
 // ----- IMGUI INIT/SHUTDOWN --
 // ----------------------------
 
@@ -1395,10 +1716,8 @@ static void imgui_Init(float width, float height)
 static void imgui_Shutdown()
 {
     dmLogInfo("imgui_Shutdown");
-    fonts.clear();
-    images.clear();
 
-    ImGui_ImplOpenGL3_Shutdown();   
+    ImGui_ImplOpenGL3_Shutdown();
     ImGui::DestroyContext();
 }
 
@@ -1431,7 +1750,7 @@ static const luaL_reg Module_methods[] =
     {"image_add", imgui_ImageAdd},
 
     {"image_b64_decode", imgui_ImageB64Decode},
-    
+
     {"font_add_ttf_file", imgui_FontAddTTFFile},
     {"font_add_ttf_data", imgui_FontAddTTFData},
     {"font_push", imgui_FontPush},
@@ -1453,9 +1772,19 @@ static const luaL_reg Module_methods[] =
     {"begin_tab_item", imgui_BeginTabItem},
     {"end_tab_item", imgui_EndTabItem},
 
+    {"begin_tooltip", imgui_BeginTooltip},
+    {"end_tooltip", imgui_EndTooltip},
+
     {"begin_combo", imgui_BeginCombo},
     {"end_combo", imgui_EndCombo},
     {"combo", imgui_Combo},
+
+    {"begin_dragdrop_source", imgui_BeginDragDropSource},
+    {"end_dragdrop_source", imgui_EndDragDropSource},
+    {"begin_dragdrop_target", imgui_BeginDragDropTarget},
+    {"end_dragdrop_target", imgui_EndDragDropTarget},
+    {"set_dragdrop_payload", imgui_SetDragDropPayload},
+    {"accept_dragdrop_payload", imgui_AcceptDragDropPayload},
 
     {"begin_table", imgui_BeginTable},
     {"end_table", imgui_EndTable},
@@ -1464,6 +1793,13 @@ static const luaL_reg Module_methods[] =
     {"table_set_column_index", imgui_TableSetColumnIndex},
     {"table_setup_column", imgui_TableSetupColumn},
     {"table_headers_row", imgui_TableHeadersRow},
+
+    {"begin_popup_context_item", imgui_BeginPopupContextItem},
+    {"begin_popup", imgui_BeginPopup},
+    {"begin_popup_modal", imgui_BeginPopupModal},
+    {"open_popup", imgui_OpenPopup},
+    {"close_current_popup", imgui_CloseCurrentPopup},
+    {"end_popup", imgui_EndPopup},
 
     {"tree_node", imgui_TreeNode},
     {"tree_pop", imgui_TreePop},
@@ -1479,7 +1815,7 @@ static const luaL_reg Module_methods[] =
     {"input_float3", imgui_InputFloat3},
     {"input_float4", imgui_InputFloat4},
     {"button", imgui_Button},
-    {"button_image", imgui_ButtonImage}, 
+    {"button_image", imgui_ButtonImage},
     {"checkbox", imgui_Checkbox},
     {"same_line", imgui_SameLine},
     {"new_line", imgui_NewLine},
@@ -1498,7 +1834,7 @@ static const luaL_reg Module_methods[] =
     {"draw_rect_filled", imgui_DrawRectFilled},
     {"draw_line", imgui_DrawLine},
     {"draw_progress", imgui_DrawProgressBar},
-    
+
     {"demo", imgui_Demo},
 
     {"set_mouse_input", imgui_SetMouseInput},
@@ -1509,7 +1845,10 @@ static const luaL_reg Module_methods[] =
     {"set_key_modifier_super", imgui_SetKeyModifierSuper},
     {"add_input_character", imgui_AddInputCharacter},
 
+    {"is_item_active", imgui_IsItemActive},
+    {"is_item_focused", imgui_IsItemFocused},
     {"is_item_clicked", imgui_IsItemClicked},
+    {"is_item_double_clicked", imgui_IsItemDoubleClicked},
     {"is_item_hovered", imgui_IsItemHovered},
     {"is_mouse_clicked", imgui_IsMouseClicked},
     {"is_mouse_double_clicked", imgui_IsMouseDoubleClicked},
@@ -1521,6 +1860,8 @@ static const luaL_reg Module_methods[] =
     {"set_style_tab_rounding", imgui_SetStyleTabRounding},
     {"set_style_scrollbar_rounding", imgui_SetStyleScrollbarRounding},
     {"set_style_color", imgui_SetStyleColor},
+    {"push_style_color", imgui_PushStyleColor},
+    {"pop_style_color", imgui_PopStyleColor},
 
     {"set_defaults", imgui_SetDefaults},
     {"set_ini_filename", imgui_SetIniFilename},
@@ -1528,7 +1869,10 @@ static const luaL_reg Module_methods[] =
     {"set_cursor_pos", imgui_SetCursorPos},
     {"set_display_size", imgui_SetDisplaySize},
     {"set_window_font_scale", imgui_SetWindowFontScale},
+    {"set_global_font_scale", imgui_SetGlobalFontScale},
+    {"scale_all_sizes", imgui_ScaleAllSizes},
 
+    {"set_scroll_here_y", imgui_SetScrollHereY},
     {0, 0}
 };
 
@@ -1665,6 +2009,42 @@ static void LuaInit(lua_State* L)
     lua_setfieldstringint(L, "TABLECOLUMN_INDENTENABLE", ImGuiTableColumnFlags_IndentEnable);  // Use current Indent value when entering cell (default for column 0).
     lua_setfieldstringint(L, "TABLECOLUMN_INDENTDISABLE", ImGuiTableColumnFlags_IndentDisable);  // Ignore current Indent value when entering cell (default for columns > 0). Indentation changes _within_ the cell will still be honored.
 
+    lua_setfieldstringint(L, "TABLE_NONE", ImGuiTableFlags_None);
+    lua_setfieldstringint(L, "TABLE_RESIZABLE", ImGuiTableFlags_Resizable);   // Enable resizing columns.
+    lua_setfieldstringint(L, "TABLE_REORDERABLE", ImGuiTableFlags_Reorderable);   // Enable reordering columns in header row (need calling TableSetupColumn() + TableHeadersRow() to display headers)
+    lua_setfieldstringint(L, "TABLE_HIDEABLE", ImGuiTableFlags_Hideable);   // Enable hiding/disabling columns in context menu.
+    lua_setfieldstringint(L, "TABLE_SORTABLE", ImGuiTableFlags_Sortable);   // Enable sorting. Call TableGetSortSpecs() to obtain sort specs. Also see ImGuiTableFlags_SortMulti and ImGuiTableFlags_SortTristate.
+    lua_setfieldstringint(L, "TABLE_NOSAVEDSETTINGS", ImGuiTableFlags_NoSavedSettings);   // Disable persisting columns order, width and sort settings in the .ini file.
+    lua_setfieldstringint(L, "TABLE_CONTEXTMENUINBODY", ImGuiTableFlags_ContextMenuInBody);   // Right-click on columns body/contents will display table context menu. By default it is available in TableHeadersRow().
+    lua_setfieldstringint(L, "TABLE_ROWBG", ImGuiTableFlags_RowBg);   // Set each RowBg color with ImGuiCol_TableRowBg or ImGuiCol_TableRowBgAlt (equivalent of calling TableSetBgColor with ImGuiTableBgFlags_RowBg0 on each row manually)
+    lua_setfieldstringint(L, "TABLE_BORDERSINNERH", ImGuiTableFlags_BordersInnerH);   // Draw horizontal borders between rows.
+    lua_setfieldstringint(L, "TABLE_BORDERSOUTERH", ImGuiTableFlags_BordersOuterH);   // Draw horizontal borders at the top and bottom.
+    lua_setfieldstringint(L, "TABLE_BORDERSINNERV", ImGuiTableFlags_BordersInnerV);   // Draw vertical borders between columns.
+    lua_setfieldstringint(L, "TABLE_BORDERSOUTERV", ImGuiTableFlags_BordersOuterV);  // Draw vertical borders on the left and right sides.
+    lua_setfieldstringint(L, "TABLE_BORDERSH", ImGuiTableFlags_BordersH); // Draw horizontal borders.
+    lua_setfieldstringint(L, "TABLE_BORDERSV", ImGuiTableFlags_BordersV); // Draw vertical borders.
+    lua_setfieldstringint(L, "TABLE_BORDERSINNER", ImGuiTableFlags_BordersInner); // Draw inner borders.
+    lua_setfieldstringint(L, "TABLE_BORDERSOUTER", ImGuiTableFlags_BordersOuter); // Draw outer borders.
+    lua_setfieldstringint(L, "TABLE_BORDERS", ImGuiTableFlags_Borders);   // Draw all borders.
+    lua_setfieldstringint(L, "TABLE_NOBORDERSINBODY", ImGuiTableFlags_NoBordersInBody);  // [ALPHA] Disable vertical borders in columns Body (borders will always appears in Headers). -> May move to style
+    lua_setfieldstringint(L, "TABLE_NOBORDERSINBODYUNTILRESIZE", ImGuiTableFlags_NoBordersInBodyUntilResize);  // [ALPHA] Disable vertical borders in columns Body until hovered for resize (borders will always appears in Headers). -> May move to style
+    lua_setfieldstringint(L, "TABLE_SIZINGFIXEDFIT", ImGuiTableFlags_SizingFixedFit);  // Columns default to _WidthFixed or _WidthAuto (if resizable or not resizable), matching contents width.
+    lua_setfieldstringint(L, "TABLE_SIZINGFIXEDSAME", ImGuiTableFlags_SizingFixedSame);  // Columns default to _WidthFixed or _WidthAuto (if resizable or not resizable), matching the maximum contents width of all columns. Implicitly enable ImGuiTableFlags_NoKeepColumnsVisible.
+    lua_setfieldstringint(L, "TABLE_SIZINGSTRETCHPROP", ImGuiTableFlags_SizingStretchProp);  // Columns default to _WidthStretch with default weights proportional to each columns contents widths.
+    lua_setfieldstringint(L, "TABLE_SIZINGSTRETCHSAME", ImGuiTableFlags_SizingStretchSame);  // Columns default to _WidthStretch with default weights all equal, unless overriden by TableSetupColumn().
+    lua_setfieldstringint(L, "TABLE_NOHOSTEXTENDX", ImGuiTableFlags_NoHostExtendX);  // Make outer width auto-fit to columns, overriding outer_size.x value. Only available when ScrollX/ScrollY are disabled and Stretch columns are not used.
+    lua_setfieldstringint(L, "TABLE_NOHOSTEXTENDY", ImGuiTableFlags_NoHostExtendY);  // Make outer height stop exactly at outer_size.y (prevent auto-extending table past the limit). Only available when ScrollX/ScrollY are disabled. Data below the limit will be clipped and not visible.
+    lua_setfieldstringint(L, "TABLE_NOKEEPCOLUMNSVISIBLE", ImGuiTableFlags_NoKeepColumnsVisible);  // Disable keeping column always minimally visible when ScrollX is off and table gets too small. Not recommended if columns are resizable.
+    lua_setfieldstringint(L, "TABLE_PRECISEWIDTHS", ImGuiTableFlags_PreciseWidths);  // Disable distributing remainder width to stretched columns (width allocation on a 100-wide table with 3 columns: Without this flag: 33,33,34. With this flag: 33,33,33). With larger number of columns, resizing will appear to be less smooth.
+    lua_setfieldstringint(L, "TABLE_NOCLIP", ImGuiTableFlags_NoClip);  // Disable clipping rectangle for every individual columns (reduce draw command count, items will be able to overflow into other columns). Generally incompatible with TableSetupScrollFreeze().
+    lua_setfieldstringint(L, "TABLE_PADOUTERX", ImGuiTableFlags_PadOuterX);  // Default if BordersOuterV is on. Enable outer-most padding. Generally desirable if you have headers.
+    lua_setfieldstringint(L, "TABLE_NOPADOUTERX", ImGuiTableFlags_NoPadOuterX);  // Default if BordersOuterV is off. Disable outer-most padding.
+    lua_setfieldstringint(L, "TABLE_NOPADINNERX", ImGuiTableFlags_NoPadInnerX);  // Disable inner padding between columns (double inner padding if BordersOuterV is on, single inner padding if BordersOuterV is off).
+    lua_setfieldstringint(L, "TABLE_SCROLLX", ImGuiTableFlags_ScrollX);  // Enable horizontal scrolling. Require 'outer_size' parameter of BeginTable() to specify the container size. Changes default sizing policy. Because this create a child window, ScrollY is currently generally recommended when using ScrollX.
+    lua_setfieldstringint(L, "TABLE_SCROLLY", ImGuiTableFlags_ScrollY);  // Enable vertical scrolling. Require 'outer_size' parameter of BeginTable() to specify the container size.
+    lua_setfieldstringint(L, "TABLE_SORTMULTI", ImGuiTableFlags_SortMulti);  // Hold shift when clicking headers to sort on multiple column. TableGetSortSpecs() may return specs where (SpecsCount > 1).
+    lua_setfieldstringint(L, "TABLE_SORTTRISTATE", ImGuiTableFlags_SortTristate);  // Allow no sorting, disable default sorting. TableGetSortSpecs() may return specs where (SpecsCount == 0).
+
     lua_setfieldstringint(L, "WINDOWFLAGS_NONE", ImGuiWindowFlags_None);
     lua_setfieldstringint(L, "WINDOWFLAGS_NOTITLEBAR", ImGuiWindowFlags_NoTitleBar); // Disable title-bar
     lua_setfieldstringint(L, "WINDOWFLAGS_NORESIZE", ImGuiWindowFlags_NoResize); // Disable user resizing with the lower-right grip
@@ -1689,6 +2069,54 @@ static void LuaInit(lua_State* L)
     lua_setfieldstringint(L, "WINDOWFLAGS_NONAV", ImGuiWindowFlags_NoNav); // ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
     lua_setfieldstringint(L, "WINDOWFLAGS_NODECORATION", ImGuiWindowFlags_NoDecoration); // ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse,
     lua_setfieldstringint(L, "WINDOWFLAGS_NOINPUTS", ImGuiWindowFlags_NoInputs); // ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus,
+
+    lua_setfieldstringint(L, "POPUPFLAGS_NONE", ImGuiPopupFlags_None);
+    lua_setfieldstringint(L, "POPUPFLAGS_MOUSEBUTTONLEFT", ImGuiPopupFlags_MouseButtonLeft);        // For BeginPopupContext*(): open on Left Mouse release. Guaranteed to always be == 0 (same as ImGuiMouseButton_Left)
+    lua_setfieldstringint(L, "POPUPFLAGS_MOUSEBUTTONRIGHT", ImGuiPopupFlags_MouseButtonRight);        // For BeginPopupContext*(): open on Right Mouse release. Guaranteed to always be == 1 (same as ImGuiMouseButton_Right)
+    lua_setfieldstringint(L, "POPUPFLAGS_MOUSEBUTTONMIDDLE", ImGuiPopupFlags_MouseButtonMiddle);        // For BeginPopupContext*(): open on Middle Mouse release. Guaranteed to always be == 2 (same as ImGuiMouseButton_Middle)
+    lua_setfieldstringint(L, "POPUPFLAGS_MOUSEBUTTONMASK", ImGuiPopupFlags_MouseButtonMask_);
+    lua_setfieldstringint(L, "POPUPFLAGS_MOUSEBUTTONDEFAULT", ImGuiPopupFlags_MouseButtonDefault_);
+    lua_setfieldstringint(L, "POPUPFLAGS_NOOPENOVEREXISTINGPOPUP", ImGuiPopupFlags_NoOpenOverExistingPopup);   // For OpenPopup*(), BeginPopupContext*(): don't open if there's already a popup at the same level of the popup stack
+    lua_setfieldstringint(L, "POPUPFLAGS_NOOPENOVERITEMS", ImGuiPopupFlags_NoOpenOverItems);   // For BeginPopupContextWindow(): don't return true when hovering items, only when hovering empty space
+    lua_setfieldstringint(L, "POPUPFLAGS_ANYPOPUPID", ImGuiPopupFlags_AnyPopupId);   // For IsPopupOpen(): ignore the ImGuiID parameter and test for any popup.
+    lua_setfieldstringint(L, "POPUPFLAGS_ANYPOPUPLEVEL", ImGuiPopupFlags_AnyPopupLevel);   // For IsPopupOpen(): search/test at any level of the popup stack (default test in the current level)
+    lua_setfieldstringint(L, "POPUPFLAGS_ANYPOPUP", ImGuiPopupFlags_AnyPopup);
+
+    lua_setfieldstringint(L, "DROPFLAGS_NONE", ImGuiDragDropFlags_None);
+    lua_setfieldstringint(L, "DROPFLAGS_SOURCENOPREVIEWTOOLTIP", ImGuiDragDropFlags_SourceNoPreviewTooltip);   // By default, a successful call to BeginDragDropSource opens a tooltip so you can display a preview or description of the source contents. This flag disable this behavior.
+    lua_setfieldstringint(L, "DROPFLAGS_SOURCENODISABLEHOVER", ImGuiDragDropFlags_SourceNoDisableHover);   // By default, when dragging we clear data so that IsItemHovered() will return false, to avoid subsequent user code submitting tooltips. This flag disable this behavior so you can still call IsItemHovered() on the source item.
+    lua_setfieldstringint(L, "DROPFLAGS_SOURCENOHOLDTOOPENOTHERS", ImGuiDragDropFlags_SourceNoHoldToOpenOthers);   // Disable the behavior that allows to open tree nodes and collapsing header by holding over them while dragging a source item.
+    lua_setfieldstringint(L, "DROPFLAGS_SOURCEALLOWNULLID", ImGuiDragDropFlags_SourceAllowNullID);   // Allow items such as Text(), Image() that have no unique identifier to be used as drag source, by manufacturing a temporary identifier based on their window-relative position. This is extremely unusual within the dear imgui ecosystem and so we made it explicit.
+    lua_setfieldstringint(L, "DROPFLAGS_SOURCEEXTERN", ImGuiDragDropFlags_SourceExtern);   // External source (from outside of dear imgui), won't attempt to read current item/window info. Will always return true. Only one Extern source can be active simultaneously.
+    lua_setfieldstringint(L, "DROPFLAGS_SOURCEAUTOEXPIREPAYLOAD", ImGuiDragDropFlags_SourceAutoExpirePayload);   // Automatically expire the payload if the source cease to be submitted (otherwise payloads are persisting while being dragged)
+    lua_setfieldstringint(L, "DROPFLAGS_ACCEPTBEFOREDELIVERY", ImGuiDragDropFlags_AcceptBeforeDelivery);  // AcceptDragDropPayload() will returns true even before the mouse button is released. You can then call IsDelivery() to test if the payload needs to be delivered.
+    lua_setfieldstringint(L, "DROPFLAGS_ACCEPTNODRAWDEFAULTRECT", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);  // Do not draw the default highlight rectangle when hovering over target.
+    lua_setfieldstringint(L, "DROPFLAGS_ACCEPTNOPREVIEWTOOLTIP", ImGuiDragDropFlags_AcceptNoPreviewTooltip);  // Request hiding the BeginDragDropSource tooltip from the BeginDragDropTarget site.
+    lua_setfieldstringint(L, "DROPFLAGS_ACCEPTPEEKONLY", ImGuiDragDropFlags_AcceptPeekOnly);  // For peeking ahead and inspecting the payload before delivery.
+
+
+    lua_setfieldstringint(L, "INPUTFLAGS_NONE", ImGuiInputTextFlags_None);
+    lua_setfieldstringint(L, "INPUTFLAGS_CHARSDECIMAL", ImGuiInputTextFlags_CharsDecimal);   // Allow 0123456789.+-*/
+    lua_setfieldstringint(L, "INPUTFLAGS_CHARSHEXADECIMAL", ImGuiInputTextFlags_CharsHexadecimal);   // Allow 0123456789ABCDEFabcdef
+    lua_setfieldstringint(L, "INPUTFLAGS_CHARSUPPERCASE", ImGuiInputTextFlags_CharsUppercase);   // Turn a..z into A..Z
+    lua_setfieldstringint(L, "INPUTFLAGS_CHARSNOBLANK", ImGuiInputTextFlags_CharsNoBlank);   // Filter out spaces, tabs
+    lua_setfieldstringint(L, "INPUTFLAGS_AUTOSELECTALL", ImGuiInputTextFlags_AutoSelectAll);   // Select entire text when first taking mouse focus
+    lua_setfieldstringint(L, "INPUTFLAGS_ENTERRETURNSTRUE", ImGuiInputTextFlags_EnterReturnsTrue);   // Return 'true' when Enter is pressed (as opposed to every time the value was modified). Consider looking at the IsItemDeactivatedAfterEdit() function.
+    lua_setfieldstringint(L, "INPUTFLAGS_CALLBACKCOMPLETION", ImGuiInputTextFlags_CallbackCompletion);   // Callback on pressing TAB (for completion handling)
+    lua_setfieldstringint(L, "INPUTFLAGS_CALLBACKHISTORY", ImGuiInputTextFlags_CallbackHistory);   // Callback on pressing Up/Down arrows (for history handling)
+    lua_setfieldstringint(L, "INPUTFLAGS_CALLBACKALWAYS", ImGuiInputTextFlags_CallbackAlways);   // Callback on each iteration. User code may query cursor position, modify text buffer.
+    lua_setfieldstringint(L, "INPUTFLAGS_CALLBACKCHARFILTER", ImGuiInputTextFlags_CallbackCharFilter);   // Callback on character inputs to replace or discard them. Modify 'EventChar' to replace or discard, or return 1 in callback to discard.
+    lua_setfieldstringint(L, "INPUTFLAGS_ALLOWTABINPUT", ImGuiInputTextFlags_AllowTabInput);  // Pressing TAB input a '\t' character into the text field
+    lua_setfieldstringint(L, "INPUTFLAGS_CTRLENTERFORNEWLINE", ImGuiInputTextFlags_CtrlEnterForNewLine);  // In multi-line mode, unfocus with Enter, add new line with Ctrl+Enter (default is opposite: unfocus with Ctrl+Enter, add line with Enter).
+    lua_setfieldstringint(L, "INPUTFLAGS_NOHORIZONTALSCROLL", ImGuiInputTextFlags_NoHorizontalScroll);  // Disable following the cursor horizontally
+    lua_setfieldstringint(L, "INPUTFLAGS_ALWAYSINSERTMODE", ImGuiInputTextFlags_AlwaysInsertMode);  // Insert mode
+    lua_setfieldstringint(L, "INPUTFLAGS_READONLY", ImGuiInputTextFlags_ReadOnly);  // Read-only mode
+    lua_setfieldstringint(L, "INPUTFLAGS_PASSWORD", ImGuiInputTextFlags_Password);  // Password mode, display all characters as '*'
+    lua_setfieldstringint(L, "INPUTFLAGS_NOUNDOREDO", ImGuiInputTextFlags_NoUndoRedo);  // Disable undo/redo. Note that input text owns the text data while active, if you want to provide your own undo/redo stack you need e.g. to call ClearActiveID().
+    lua_setfieldstringint(L, "INPUTFLAGS_CHARSSCIENTIFIC", ImGuiInputTextFlags_CharsScientific);  // Allow 0123456789.+-*/eE (Scientific notation input)
+    lua_setfieldstringint(L, "INPUTFLAGS_CALLBACKRESIZE", ImGuiInputTextFlags_CallbackResize);  // Callback on buffer capacity changes request (beyond 'buf_size' parameter value), allowing the string to grow. Notify when the string wants to be resized (for string types which hold a cache of their Size). You will be provided a new BufSize in the callback and NEED to honor it. (see misc/cpp/imgui_stdlib.h for an example of using this)
+    lua_setfieldstringint(L, "INPUTFLAGS_CALLBACKEDIT", ImGuiInputTextFlags_CallbackEdit);  // Callback on any edit (note that InputText() already returns true on edit, the callback is useful mainly to manipulate the underlying buffer while focus is active)
+
 
     lua_pop(L, 1);
     assert(top == lua_gettop(L));
