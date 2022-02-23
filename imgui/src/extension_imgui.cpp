@@ -42,9 +42,19 @@ static bool g_imgui_NewFrame        = false;
 static char* g_imgui_TextBuffer     = 0;
 static dmArray<ImFont*> g_imgui_Fonts;
 static dmArray<ImgObject> g_imgui_Images;
+static bool g_VerifyGraphicsCalls   = false;
 
 
 
+static void imgui_ClearGLError()
+{
+    if (!g_VerifyGraphicsCalls) return;
+    GLint err = glGetError();
+    while (err != 0)
+    {
+        err = glGetError();
+    }
+}
 
 
 // ----------------------------
@@ -224,9 +234,20 @@ static int imgui_ImageAdd( lua_State *L )
 {
     DM_LUA_STACK_CHECK(L, 0);
     GLuint tid = (GLuint)luaL_checkinteger(L, 1);
-    int w = luaL_checkinteger(L, 2);
-    int h = luaL_checkinteger(L, 3);
-    ImGui::Image((void*)(intptr_t)tid, ImVec2(w, h));
+    int w = luaL_checknumber(L, 2);
+    int h = luaL_checknumber(L, 3);
+
+    ImVec2 uv0 = ImVec2(0, 0);
+    if (lua_isnumber(L, 4) && lua_isnumber(L, 5)) {
+        uv0.x = luaL_checknumber(L, 4);
+        uv0.y = luaL_checknumber(L, 5);
+    }
+    ImVec2 uv1 = ImVec2(1, 1);
+    if (lua_isnumber(L, 6) && lua_isnumber(L, 7)) {
+        uv1.x = luaL_checknumber(L, 6);
+        uv1.y = luaL_checknumber(L, 7);
+    }
+    ImGui::Image((void*)(intptr_t)tid, ImVec2(w, h), uv0, uv1);
     return 0;
 }
 
@@ -247,6 +268,58 @@ static int imgui_ImageFree( lua_State *L )
 }
 
 // ----------------------------
+// ----- PRIMITIVES -----------
+// ----------------------------
+
+static int imgui_DrawListAddLine(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    float x1 = luaL_checknumber(L, 1);
+    float y1 = luaL_checknumber(L, 2);
+    float x2 = luaL_checknumber(L, 3);
+    float y2 = luaL_checknumber(L, 4);
+
+    float r = (float)luaL_checknumber(L, 5);
+    float g = (float)luaL_checknumber(L, 6);
+    float b = (float)luaL_checknumber(L, 7);
+    float a = (float)luaL_checknumber(L, 8);
+
+    float thickness = 1.0f;
+    if (lua_isnumber(L, 9))
+    {
+        thickness = luaL_checknumber(L, 9);
+    }
+
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(x1, y1), ImVec2(x2, y2), IM_COL32(r, g, b, a), thickness);
+    return 0;
+}
+
+static int imgui_DrawListAddRect(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    float x1 = luaL_checknumber(L, 1);
+    float y1 = luaL_checknumber(L, 2);
+    float x2 = luaL_checknumber(L, 3);
+    float y2 = luaL_checknumber(L, 4);
+
+    float r = (float)luaL_checknumber(L, 5);
+    float g = (float)luaL_checknumber(L, 6);
+    float b = (float)luaL_checknumber(L, 7);
+    float a = (float)luaL_checknumber(L, 8);
+
+    float thickness = 1.0f;
+    if (lua_isnumber(L, 9))
+    {
+        thickness = luaL_checknumber(L, 9);
+    }
+    float rounding = 0.0f;
+    int flags = 0;
+
+    ImGui::GetWindowDrawList()->AddRect(ImVec2(x1, y1), ImVec2(x2, y2), IM_COL32(r, g, b, a), rounding, flags, thickness);
+    return 0;
+}
+
+// ----------------------------
 // ----- FRAMES ---------------
 // ----------------------------
 
@@ -255,6 +328,7 @@ static void imgui_NewFrame()
     if (g_imgui_NewFrame == false)
     {
         ImGui_ImplOpenGL3_NewFrame();
+        imgui_ClearGLError();
         ImGui::NewFrame();
         g_imgui_NewFrame = true;
     }
@@ -381,6 +455,28 @@ static int imgui_TreePop(lua_State* L)
     ImGui::TreePop();
     return 0;
 }
+
+
+// ----------------------------
+// ----- Push/Pop ID ----------
+// ----------------------------
+static int imgui_PushId(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+
+    const char* text = luaL_checkstring(L, 1);
+    ImGui::PushID(text);
+
+    return 0;
+}
+
+static int imgui_PopId(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    ImGui::PopID();
+    return 0;
+}
+
 
 // ----------------------------
 // ----- WINDOW ---------------
@@ -1205,6 +1301,15 @@ static int imgui_Separator(lua_State* L)
     return 0;
 }
 
+static int imgui_GetCursorScreenPos(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 2);
+
+    ImVec2 p = ImGui::GetCursorScreenPos();
+    lua_pushnumber(L, p.x);
+    lua_pushnumber(L, p.y);
+    return 2;
+}
 
 // ----------------------------
 // ----- IMGUI PLOT -----------
@@ -1596,6 +1701,7 @@ static dmExtension::Result imgui_Draw(dmExtension::Params* params)
     imgui_NewFrame();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    imgui_ClearGLError();
 
     g_imgui_NewFrame = false;
     return dmExtension::RESULT_OK;
@@ -1711,6 +1817,7 @@ static void imgui_Init(float width, float height)
     }
 
     ImGui_ImplOpenGL3_Init();
+    imgui_ClearGLError();
 }
 
 static void imgui_Shutdown()
@@ -1718,6 +1825,9 @@ static void imgui_Shutdown()
     dmLogInfo("imgui_Shutdown");
 
     ImGui_ImplOpenGL3_Shutdown();
+    imgui_ClearGLError();
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->Clear();
     ImGui::DestroyContext();
 }
 
@@ -1738,6 +1848,14 @@ static void imgui_ExtensionShutdown()
         free(g_imgui_TextBuffer);
         g_imgui_TextBuffer = 0;
     }
+
+    while (!g_imgui_Images.Empty())
+    {
+        glDeleteTextures(1, &g_imgui_Images.Back().tid);
+        g_imgui_Images.Pop();
+    }
+
+    g_imgui_Fonts.SetSize(0);
 }
 
 // Functions exposed to Lua
@@ -1804,6 +1922,9 @@ static const luaL_reg Module_methods[] =
     {"tree_node", imgui_TreeNode},
     {"tree_pop", imgui_TreePop},
 
+    {"push_id", imgui_PushId},
+    {"pop_id", imgui_PopId},
+
     {"selectable", imgui_Selectable},
     {"text", imgui_Text},
     {"text_colored", imgui_TextColored},
@@ -1817,6 +1938,7 @@ static const luaL_reg Module_methods[] =
     {"button", imgui_Button},
     {"button_image", imgui_ButtonImage},
     {"checkbox", imgui_Checkbox},
+
     {"same_line", imgui_SameLine},
     {"new_line", imgui_NewLine},
     {"bullet", imgui_Bullet},
@@ -1824,6 +1946,10 @@ static const luaL_reg Module_methods[] =
     {"unindent", imgui_Unindent},
     {"spacing", imgui_Spacing},
     {"separator", imgui_Separator},
+    {"get_cursor_screen_pos", imgui_GetCursorScreenPos},
+
+    {"add_line", imgui_DrawListAddLine},
+    {"add_rect", imgui_DrawListAddRect},
 
     {"plot_lines", imgui_PlotLines},
     {"plot_histogram", imgui_PlotHistogram},
@@ -1936,6 +2062,29 @@ static void LuaInit(lua_State* L)
     lua_setfieldstringint(L, "TREENODE_SPAN_AVAILABLE_WIDTH", ImGuiTreeNodeFlags_SpanAvailWidth);
     lua_setfieldstringint(L, "TREENODE_SPAN_FULL_WIDTH", ImGuiTreeNodeFlags_SpanFullWidth);
     lua_setfieldstringint(L, "TREENODE_NAV_LEFT_JUMPS_BACK_HERE", ImGuiTreeNodeFlags_NavLeftJumpsBackHere);
+
+    lua_setfieldstringint(L, "KEY_TAB", ImGuiKey_Tab);
+    lua_setfieldstringint(L, "KEY_LEFTARROW", ImGuiKey_LeftArrow);
+    lua_setfieldstringint(L, "KEY_RIGHTARROW", ImGuiKey_RightArrow);
+    lua_setfieldstringint(L, "KEY_UPARROW", ImGuiKey_UpArrow);
+    lua_setfieldstringint(L, "KEY_DOWNARROW", ImGuiKey_DownArrow);
+    lua_setfieldstringint(L, "KEY_PAGEUP", ImGuiKey_PageUp);
+    lua_setfieldstringint(L, "KEY_PAGEDOWN", ImGuiKey_PageDown);
+    lua_setfieldstringint(L, "KEY_HOME", ImGuiKey_Home);
+    lua_setfieldstringint(L, "KEY_END", ImGuiKey_End);
+    lua_setfieldstringint(L, "KEY_INSERT", ImGuiKey_Insert);
+    lua_setfieldstringint(L, "KEY_DELETE", ImGuiKey_Delete);
+    lua_setfieldstringint(L, "KEY_BACKSPACE", ImGuiKey_Backspace);
+    lua_setfieldstringint(L, "KEY_SPACE", ImGuiKey_Space);
+    lua_setfieldstringint(L, "KEY_ENTER", ImGuiKey_Enter);
+    lua_setfieldstringint(L, "KEY_ESCAPE", ImGuiKey_Escape);
+    lua_setfieldstringint(L, "KEY_KEYPADENTER", ImGuiKey_KeyPadEnter);
+    lua_setfieldstringint(L, "KEY_A", ImGuiKey_A);
+    lua_setfieldstringint(L, "KEY_C", ImGuiKey_C);
+    lua_setfieldstringint(L, "KEY_V", ImGuiKey_V);
+    lua_setfieldstringint(L, "KEY_X", ImGuiKey_X);
+    lua_setfieldstringint(L, "KEY_Y", ImGuiKey_Y);
+    lua_setfieldstringint(L, "KEY_Z", ImGuiKey_Z);
 
     lua_setfieldstringint(L, "ImGuiCol_Text", ImGuiCol_Text);
     lua_setfieldstringint(L, "ImGuiCol_TextDisabled", ImGuiCol_TextDisabled);
@@ -2130,6 +2279,14 @@ dmExtension::Result AppInitializeDefoldImGui(dmExtension::AppParams* params)
 
 dmExtension::Result InitializeDefoldImGui(dmExtension::Params* params)
 {
+    // This is actually more complex than this,
+    // but that value is buried deep in the private internals of dmGraphics_OpenGL
+    #ifdef DM_RELEASE
+    g_VerifyGraphicsCalls = false;
+    #else
+    g_VerifyGraphicsCalls = true;
+    #endif
+
     LuaInit(params->m_L);
     float displayWidth = dmConfigFile::GetFloat(params->m_ConfigFile, "display.width", 960.0f);
     float displayHeight = dmConfigFile::GetFloat(params->m_ConfigFile, "display.height", 540.0f);
