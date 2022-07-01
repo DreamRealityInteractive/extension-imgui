@@ -1330,7 +1330,16 @@
     parameters:
       - name: rounding
         type: number
+        
+#*****************************************************************************************************
 
+  - name: set_style_scrollbar_size
+    type: function
+
+    parameters:
+      - name: size
+        type: number
+        
 #*****************************************************************************************************
 
   - name: set_style_color
