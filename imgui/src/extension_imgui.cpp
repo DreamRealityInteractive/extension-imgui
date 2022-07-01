@@ -1591,6 +1591,13 @@ static int imgui_SetStyleScrollbarRounding(lua_State* L)
     style.ScrollbarRounding = luaL_checknumber(L, 1);
     return 0;
 }
+static int imgui_SetStyleScrollbarSize(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScrollbarSize = luaL_checknumber(L, 1);
+    return 0;
+}
 static int imgui_SetStyleColor(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 0);
@@ -2082,6 +2089,7 @@ static const luaL_reg Module_methods[] =
     {"set_style_frame_rounding", imgui_SetStyleFrameRounding},
     {"set_style_tab_rounding", imgui_SetStyleTabRounding},
     {"set_style_scrollbar_rounding", imgui_SetStyleScrollbarRounding},
+    {"set_style_scrollbar_size", imgui_SetStyleScrollbarSize},
     {"set_style_color", imgui_SetStyleColor},
     {"push_style_color", imgui_PushStyleColor},
     {"pop_style_color", imgui_PopStyleColor},
