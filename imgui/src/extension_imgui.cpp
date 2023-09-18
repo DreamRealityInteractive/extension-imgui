@@ -1622,7 +1622,7 @@ static int imgui_IsItemHovered(lua_State* L)
 }
 
 static int imgui_GetItemRectMax(lua_State* L)
-{
+{   
     DM_LUA_STACK_CHECK(L, 2);
     imgui_NewFrame();
     ImVec2 rect = ImGui::GetItemRectMax();
@@ -1630,6 +1630,16 @@ static int imgui_GetItemRectMax(lua_State* L)
     lua_pushnumber(L, rect.y);
     return 2;
 }
+
+static int imgui_IsWantCaptureMouse(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    ImGuiIO& io = ImGui::GetIO();
+    lua_pushboolean(L, io.WantCaptureMouse);
+    return 1;
+}
+
+
 
 // ----------------------------
 // ----- STYLE ----------------
@@ -1677,6 +1687,13 @@ static int imgui_SetStyleScrollbarRounding(lua_State* L)
     DM_LUA_STACK_CHECK(L, 0);
     ImGuiStyle& style = ImGui::GetStyle();
     style.ScrollbarRounding = luaL_checknumber(L, 1);
+    return 0;
+}
+static int imgui_SetStyleScrollbarSize(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 0);
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScrollbarSize = luaL_checknumber(L, 1);
     return 0;
 }
 static int imgui_SetStyleColor(lua_State* L)
@@ -2218,6 +2235,7 @@ static const luaL_reg Module_methods[] =
     {"get_item_rect_max", imgui_GetItemRectMax},
     {"is_mouse_clicked", imgui_IsMouseClicked},
     {"is_mouse_double_clicked", imgui_IsMouseDoubleClicked},
+	{"is_want_capture_mouse", imgui_IsWantCaptureMouse},
 
     {"set_style_window_rounding", imgui_SetStyleWindowRounding},
     {"set_style_window_bordersize", imgui_SetStyleWindowBorderSize},
@@ -2225,6 +2243,7 @@ static const luaL_reg Module_methods[] =
     {"set_style_frame_rounding", imgui_SetStyleFrameRounding},
     {"set_style_tab_rounding", imgui_SetStyleTabRounding},
     {"set_style_scrollbar_rounding", imgui_SetStyleScrollbarRounding},
+    {"set_style_scrollbar_size", imgui_SetStyleScrollbarSize},
     {"set_style_color", imgui_SetStyleColor},
     {"push_style_color", imgui_PushStyleColor},
     {"pop_style_color", imgui_PopStyleColor},
