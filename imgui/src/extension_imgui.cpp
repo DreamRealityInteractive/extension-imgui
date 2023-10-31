@@ -2583,4 +2583,8 @@ void OnEventDefoldImGui(dmExtension::Params* params, const dmExtension::Event* e
     }
 }
 
+void ExposedFunction()
+{
+}
+
 DM_DECLARE_EXTENSION(DefoldImGui, LIB_NAME, AppInitializeDefoldImGui, AppFinalizeDefoldImGui, InitializeDefoldImGui, OnUpdateDefoldImGui, OnEventDefoldImGui, FinalizeDefoldImGui)
