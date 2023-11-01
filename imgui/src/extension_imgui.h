@@ -1,0 +1,1 @@
+extern void imgui_SetRenderingEnabled(bool enabled);

@@ -43,7 +43,7 @@ static char* g_imgui_TextBuffer     = 0;
 static dmArray<ImFont*> g_imgui_Fonts;
 static dmArray<ImgObject> g_imgui_Images;
 static bool g_VerifyGraphicsCalls   = false;
-
+static bool g_RenderingEnabled      = true;
 
 
 static void imgui_ClearGLError()
@@ -1896,7 +1896,12 @@ static dmExtension::Result imgui_Draw(dmExtension::Params* params)
 {
     imgui_NewFrame();
     ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    
+    if (g_RenderingEnabled)
+    {
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    }
+    
     imgui_ClearGLError();
 
     g_imgui_NewFrame = false;
@@ -1958,6 +1963,11 @@ static int imgui_DrawProgressBar(lua_State* L)
     ImVec2 size_param(xsize, ysize);
     ImGui::ProgressBar(progress, size_param);
     return 0;
+}
+
+void imgui_SetRenderingEnabled(bool enabled)
+{
+    g_RenderingEnabled = enabled;
 }
 
 // ----------------------------
