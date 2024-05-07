@@ -59,6 +59,7 @@ function init(self)
 	self.show_demo_window = false
 	self.show_close_window = false
 	self.show_live_data = false
+	self.dockspace = false
 	
 	imgui.set_ini_filename()
 	set_style()
@@ -110,6 +111,11 @@ local function update_tab1(self)
 	local changed, checked = imgui.checkbox("Demo window", self.show_demo_window)
 	if changed then
 		self.show_demo_window = checked
+	end
+
+	changed, checked = imgui.checkbox("Docking", self.dockspace)
+	if changed then
+		self.dockspace = checked
 	end
 
 	imgui.separator()
@@ -493,6 +499,12 @@ end
 
 function update(self, dt)
 	main_menu_bar(self)
+
+	if self.dockspace then
+		local viewport = imgui.get_main_viewport()
+		local dockspace = imgui.dock_space_over_viewport(viewport)
+		print()
+	end
 
 	if self.show_demo_window then
 		imgui.demo()

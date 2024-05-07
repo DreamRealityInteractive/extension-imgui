@@ -1868,6 +1868,30 @@ static int imgui_SetScrollHereY(lua_State *L)
     return 0;
 }
 
+// ----------------------------
+// ----- DOCKING --------------
+// ----------------------------
+
+static int imgui_DockSpaceOverViewport(lua_State *L)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    
+    DM_LUA_STACK_CHECK(L, 1);
+    ImGuiViewport* viewport = (ImGuiViewport*)lua_touserdata(L, 1);
+    ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(viewport);
+    
+    lua_pushnumber(L, dockspace_id);
+    return 1;
+}
+
+static int imgui_GetMainViewport(lua_State *L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    void* viewport = (void*)ImGui::GetMainViewport();
+    lua_pushlightuserdata(L, viewport);
+    return 1;
+}
 
 // ----------------------------
 // ----- FONT -----------------
@@ -2355,6 +2379,9 @@ static const luaL_reg Module_methods[] =
     {"get_frame_height", imgui_GetFrameHeight},
 
     {"set_scroll_here_y", imgui_SetScrollHereY},
+
+    {"dock_space_over_viewport", imgui_DockSpaceOverViewport},
+    {"get_main_viewport", imgui_GetMainViewport},
     {0, 0}
 };
 
