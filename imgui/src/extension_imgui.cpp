@@ -1684,6 +1684,15 @@ static int imgui_IsItemHovered(lua_State* L)
     return 1;
 }
 
+static int imgui_IsItemToggledOpen(lua_State* L)
+{
+    DM_LUA_STACK_CHECK(L, 1);
+    imgui_NewFrame();
+    bool toggled_open = ImGui::IsItemToggledOpen();
+    lua_pushboolean(L, toggled_open);
+    return 1;
+}
+
 static int imgui_GetItemRectMax(lua_State* L)
 {
     DM_LUA_STACK_CHECK(L, 2);
@@ -2679,6 +2688,7 @@ static const luaL_reg Module_methods[] =
     {"is_item_clicked", imgui_IsItemClicked},
     {"is_item_double_clicked", imgui_IsItemDoubleClicked},
     {"is_item_hovered", imgui_IsItemHovered},
+    {"is_item_toggled_open", imgui_IsItemToggledOpen},
     {"get_item_rect_max", imgui_GetItemRectMax},
     {"is_mouse_clicked", imgui_IsMouseClicked},
     {"is_mouse_double_clicked", imgui_IsMouseDoubleClicked},
